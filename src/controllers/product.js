@@ -1,74 +1,118 @@
-import Product from '../models/product';
+import Product from "../models/product";
+import joi from "joi";
+import Category from "../models/category";
 
-
-export const create = async (req, res) => {
-    try {
-
-        const product = await Product.create(req.body);
-        res.status(201).json({
-            message: 'Tao san pham thanh cong',
-            product,
-        });
-    } catch (error) {
-        return res.status(400).json({
-            message: error,
-        })
-    }
-};
+const productSchema = joi.object({
+    name: joi.string().required(),
+    price: joi.number().required(),
+    categoryId: joi.string().required(),
+});
 
 export const getAll = async (req, res) => {
-    try {
+    const { _limit = 10, _sort = "createAt", _order = "asc", _page = 1 } = req.query;
 
-        const product = await Product.find();
-        res.status(201).json({
-            message: 'Hien thi thanh cong',
-            product,
-        });
+    const options = {
+        limit: _limit,
+        page: _page,
+        sort: {
+            [_sort]: _order === "desc" ? -1 : 1,
+        },
+    };
+    try {
+        const data = await Product.paginate({}, options);
+        if (data.length === 0) {
+            return res.status(200).json({
+                message: "Không có dữ liệu",
+            });
+        }
+        return res.json(data);
     } catch (error) {
-        return res.status(400).json({
-            message: error,
-        })
+        return res.status(404).json({
+            message: error.message,
+        });
     }
 };
 export const get = async (req, res) => {
     try {
+        const data = await Product.findById(req.params.id).populate("categoryId");
 
-        const product = await Product.findById({ _id: req.paramas.id });
-        res.status(201).json({
-            message: 'Hien thi thanh cong',
-            product,
-        });
+        if (data.length === 0) {
+            return res.status(200).json({
+                message: "Không có dữ liệu",
+            });
+        }
+        return res.json(data);
     } catch (error) {
-        return res.status(400).json({
-            message: error,
-        })
+        return res.status(404).json({
+            message: error.message,
+        });
     }
 };
+export const create = async (req, res) => {
+    try {
+        const { error } = productSchema.validate(req.body);
 
+        if (error) {
+            return res.status(400).json({
+                message: error.details.map((err) => err.message),
+            });
+        }
+        const product = await Product.create(req.body);
+
+        // Thêm ObjectId vào thuộc tính products trong model Category
+        await Category.findByIdAndUpdate(product.categoryId, {
+            $addToSet: {
+                products: product._id,
+            },
+        });
+        if (product.length === 0) {
+            return res.status(200).json({
+                message: "Không thêm được sản phẩm",
+            });
+        }
+        return res.json(product);
+    } catch (error) {
+        return res.status(404).json({
+            message: error.message,
+        });
+    }
+};
 export const update = async (req, res) => {
     try {
-        const product = await Product.findByIdAndUpdate({ _id: req.paramas.id }, req.body, { new: true });
-        res.status(201).json({
-            message: 'Cap nhat thanh cong',
-            product,
+        const data = await Product.findOneAndUpdate({ _id: req.params.id }, req.body, {
+            new: true,
+        });
+        if (data.length === 0) {
+            return res.status(200).json({
+                message: "Cập nhật sản phẩm không thành công",
+            });
+        }
+        return res.json(data);
+    } catch (error) {
+        return res.status(404).json({
+            message: error.message,
+        });
+    }
+};
+export const remove = async (req, res) => {
+    try {
+        const data = await Product.findOneAndDelete({ _id: req.params.id });
+        return res.json({
+            message: "Xóa sản phẩm thành công",
+            data,
         });
     } catch (error) {
-        return res.status(400).json({
-            message: error,
-        })
+        return res.status(404).json({
+            message: error.message,
+        });
     }
 };
 
-export const remove = async (req, res) => {
-    try {
-        const product = await Product.findByIdAndDelete({ _id: req.paramas.id });
-        res.status(201).json({
-            message: 'Cap nhat thanh cong',
-            product,
-        });
-    } catch (error) {
-        return res.status(400).json({
-            message: error,
-        })
-    }
-}
+// computed property name
+
+// const _sort = "createAt";
+
+// const myInfo = {
+//     [_sort]: "Dat",
+// };
+// console.log(myInfo.createAt); // Dat
